@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Votação</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1>Escolha seu candidato</h1>
+
+    <form action="/votacao" method="POST">
+        <label>
+            <input type="radio" name="voto" value="Candidato A" required>
+            Candidato A
+        </label><br>
+        <label>
+            <input type="radio" name="voto" value="Candidato B">
+            Candidato B
+        </label><br>
+        <label>
+            <input type="radio" name="voto" value="Candidato C">
+            Candidato C
+        </label><br>
+        <button type="submit">Votar</button>
+    </form>
+
+    <p>{{ get_flashed_messages()|join(", ") }}</p>
+</body>
+</html>

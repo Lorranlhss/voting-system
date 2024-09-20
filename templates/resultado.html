@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resultado</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1>Resultado da Votação</h1>
+    
+    <ul>
+        {% for voto in votos %}
+        <li>{{ voto['voto'] }}: {{ voto['count'] }} votos</li>
+        {% endfor %}
+    </ul>
+</body>
+</html>
