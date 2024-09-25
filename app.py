@@ -1,99 +1,128 @@
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+#Para obter o MAC address do usuario
+from getmac import get_mac_address
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 import sqlite3
-import os
-import uuid
-import socket
+from werkzeug.security import generate_password_hash, check_password_hash
 
-app = Flask(__name__)
-app.secret_key = 'supersecretkey'
+app = Flask(__name__, static_url_path='/static')
+app.secret_key = 'chave_super_secreta'
 
-# Função para conectar ao banco de dados
+# Conexão com o banco de dados
 def get_db_connection():
     conn = sqlite3.connect('database.db')
     conn.row_factory = sqlite3.Row
     return conn
 
-# Função para inicializar o banco de dados
-def init_db():
+# Cria as tabelas ao iniciar o servidor
+def create_tables():
     conn = get_db_connection()
-    print("Inicializando o banco de dados e criando a tabela 'votos', se necessário.")
     conn.execute('''
-        CREATE TABLE IF NOT EXISTS votos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT NOT NULL,
-            voto TEXT NOT NULL,
-            mac_address TEXT NOT NULL,
-            ip_address TEXT NOT NULL
-        )
+    CREATE TABLE IF NOT EXISTS usuarios (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        password TEXT NOT NULL
+    );
     ''')
-    conn.commit()
+    
+    conn.execute('''
+    CREATE TABLE IF NOT EXISTS votos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        candidato TEXT NOT NULL,
+        mac_address TEXT NOT NULL,
+        ip_address TEXT NOT NULL,
+        UNIQUE(username, mac_address, ip_address)
+    )
+''')
     conn.close()
-    print("Banco de dados inicializado com sucesso.")
 
-# Função para obter o endereço MAC do dispositivo
-def get_mac():
-    mac = ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xff)
-                    for elements in range(0, 2*6, 8)][::-1])
-    return mac
+# Chamando a função de criação de tabelas na inicialização
+with app.app_context():
+    create_tables()
 
-# Função para obter o endereço IP
-def get_ip():
-    return socket.gethostbyname(socket.gethostname())
-
-@app.route('/', methods=['GET', 'POST'])
+# Rota para a página inicial (login)
+@app.route('/')
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
         
-        # Validando o login
-        if username == 'usuario' and password == 'senha':
-            session['username'] = username
+        conn = get_db_connection()
+        user = conn.execute('SELECT * FROM usuarios WHERE username = ?', (username,)).fetchone()
+        conn.close()
+
+        if user and check_password_hash(user['password'], password):
+            session['user_id'] = user['id']
+            session['username'] = user['username']
             return redirect(url_for('votacao'))
         else:
-            flash('Credenciais inválidas')
+            flash('Login inválido. Verifique seu nome de usuário e senha.')
+            return redirect(url_for('login'))
+    
     return render_template('login.html')
 
+# Rota para registro
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        hashed_password = generate_password_hash(password)
+
+        conn = get_db_connection()
+        try:
+            conn.execute('INSERT INTO usuarios (username, password) VALUES (?, ?)', (username, hashed_password))
+            conn.commit()
+            flash('Registrado com sucesso! Agora você pode fazer login.')
+            return redirect(url_for('login'))
+        except sqlite3.IntegrityError:
+            flash('Nome de usuário já existe.')
+            return redirect(url_for('register'))
+        finally:
+            conn.close()
+
+    return render_template('register.html')
+
+# Rota para a página de votação
 @app.route('/votacao', methods=['GET', 'POST'])
 def votacao():
-    if 'username' not in session:
-        return redirect(url_for('login'))
-
-    mac_address = get_mac()
-    ip_address = get_ip()
-
-    conn = get_db_connection()
-    voto_existente = conn.execute(
-        'SELECT * FROM votos WHERE mac_address = ? OR ip_address = ?',
-        (mac_address, ip_address)
-    ).fetchone()
-
-    if voto_existente:
-        flash('Você já votou com este dispositivo.')
-        return redirect(url_for('resultado'))
-
     if request.method == 'POST':
-        voto = request.form.get('voto')
-        if not voto:
-            flash('Por favor, selecione um candidato antes de votar.')
-        else:
-            conn.execute(
-                'INSERT INTO votos (username, voto, mac_address, ip_address) VALUES (?, ?, ?, ?)',
-                (session['username'], voto, mac_address, ip_address)
-            )
-            conn.commit()
-            conn.close()
-            return redirect(url_for('resultado'))
-    
+        candidato = request.form['candidato']
+        username = session['username']  # Assumindo que o usuário está logado
+        mac_address = get_mac_address()
+        ip_address = request.remote_addr
+
+        conn = get_db_connection()
+
+        # Verificar se o usuário já votou
+        user_vote = conn.execute(
+            'SELECT * FROM votos WHERE username = ? OR mac_address = ? OR ip_address = ?',
+            (username, mac_address, ip_address)
+        ).fetchone()
+
+        if user_vote:
+            flash("Você já votou. Não é permitido votar mais de uma vez.")
+            return redirect(url_for('votacao'))
+
+        # Se não votou, insere o voto
+        conn.execute(
+            'INSERT INTO votos (username, candidato, mac_address, ip_address) VALUES (?, ?, ?, ?)',
+            (username, candidato, mac_address, ip_address)
+        )
+        conn.commit()
+        conn.close()
+
+        flash("Voto registrado com sucesso!")
+        return redirect(url_for('votacao'))
+
     return render_template('votacao.html')
 
-@app.route('/resultado')
-def resultado():
-    conn = get_db_connection()
-    votos = conn.execute('SELECT voto, COUNT(voto) as count FROM votos GROUP BY voto').fetchall()
-    conn.close()
-    return render_template('resultado.html', votos=votos)
+# Logout
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
 
 if __name__ == '_main_':
-    init_db()
     app.run(debug=True)
