@@ -7,12 +7,50 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
 </head>
 <body>
+    <div class="container">
     <h1>Resultado da Votação</h1>
-    
-    <ul>
-        {% for voto in votos %}
-        <li>{{ voto['voto'] }}: {{ voto['count'] }} votos</li>
-        {% endfor %}
-    </ul>
+
+    <table id="tabela-resultados">
+        <thead>
+            <tr>
+                <th>Candidato</th>
+                <th>Votos</th>
+            </tr>
+        </thead>
+        <tbody id="tabela-body">
+            <!-- Os resultados serão inseridos aqui via JavaScript -->
+        </tbody>
+    </table>
+</div>
+
+<script>
+// Função para buscar os resultados em tempo real
+function atualizarResultados() {
+    fetch('/resultados-json')
+        .then(response => response.json())
+        .then(data => {
+            // Limpa o conteúdo atual da tabela
+            const tabelaBody = document.getElementById('tabela-body');
+            tabelaBody.innerHTML = '';
+
+            // Adiciona as novas linhas de candidatos e votos
+            data.forEach(voto => {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>${voto.candidato}</td><td>${voto.votos}</td>`;
+                tabelaBody.appendChild(row);
+            });
+        })
+        .catch(error => console.error('Erro ao buscar resultados:', error));
+}
+
+// Atualiza os resultados a cada 5 segundos (5000 ms)
+setInterval(atualizarResultados, 5000);
+
+// Carrega os resultados assim que a página carrega
+window.onload = atualizarResultados;
+</script>
+
+
+
 </body>
 </html>

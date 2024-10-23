@@ -8,25 +8,32 @@
 </head>
 <body>
     <div class="container">
-        <h2>Votação</h2>
-        <form action="/votacao" method="post">
-            <label for="candidato">Escolha o candidato:</label>
-            <input type="text" id="candidato" name="candidato" required>
-
-            <input type="submit" value="Votar">
-        </form>
-        <p><a href="/logout">Sair</a></p>
-
-        {% with messages = get_flashed_messages() %}
-            {% if messages %}
-                <ul>
-                {% for message in messages %}
-                    <li>{{ message }}</li>
+    <h2>Escolha o Candidato</h2>
+    <form action="/votacao" method="post">
+        <table>
+            <thead>
+                <tr>
+                    <th>Código</th>
+                    <th>Nome do Candidato</th>
+                    <th>Seleção</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for candidato in candidatos %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ candidato['nome'] }}</td>
+                    <td>
+                        <input type="radio" id="candidato{{ loop.index }}" name="candidato" value="{{ candidato['nome'] }}" required>
+                    </td>
+                </tr>
                 {% endfor %}
-                </ul>
-            {% endif %}
-        {% endwith %}
-    </div>
+            </tbody>
+        </table>
+        <input type="submit" value="Votar">
+    </form>
+</div>
+
     <footer>
         <p>© 2024 Sistema de Votação</p>
     </footer>
